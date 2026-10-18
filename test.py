@@ -5,4 +5,6 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 data = requests.get('https://localhost:7003/authors/4', verify=False).json()
 
-print(data["books"])
+string = '.'.join(['asdasd', 'asdasdasdtwewrxddf', '123123123'])
+
+print(string)
