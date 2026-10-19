@@ -3,6 +3,7 @@ import requests
 import os
 import html
 from dotenv import load_dotenv
+from datetime import datetime
 
 # игнорируем предупреждение, что сертификата нет не защищен, только для локальной разработки!!!!!!!! 
 from requests.packages import urllib3
@@ -15,6 +16,23 @@ bot = telebot.TeleBot(BOT_TOKEN)
 url = 'https://localhost:7003/authors'
 # __________________________________________________________________________
 
+def format_api_error(response) -> str:
+    try:
+        data = response.json()
+    except ValueError:
+        return f"Ошибка {response.status_code}"
+    if not isinstance(data, dict):
+        return f"Ошибка {response.status_code}"
+
+    errors = data.get("errors")
+    if isinstance(errors, dict):
+        return "\n".join(f"• {field}: {'; '.join(msgs)}" for field, msgs in errors.items())
+
+    if "message" in data:
+        return data["message"]
+
+    # "detail" -> из стандарта ASP.NEt -> возвращает так ошибки
+    return data.get("detail") or data.get("title") or f"Ошибка {response.status_code}"
 
 # автор по айди получение
 @bot.message_handler(commands=['authors'])
@@ -215,8 +233,8 @@ def get_book_year(message):
         return
 
     year = int(text_year)
-    if not 0 < year < 2027:
-        bot.send_message(chat_id, "Год выпуска должен быть в диапозоне от 0 года до 2027!")
+    if not 0 < year < datetime.now().year:
+        bot.send_message(chat_id, "Год выпуска должен быть в диапозоне от 0 года до текущего года!")
         bot.register_next_step_handler(message, get_book_year)
         return
     
@@ -257,8 +275,13 @@ def send_post_request(message):
         user_data.pop(chat_id, None)
         return
 
-    # Ответ пользователю в чат (сырой Json)
-    bot.send_message(chat_id, f"Статус: {response.status_code}\n\nОтвет сервера:\n{response.text}")
+    if response.status_code == 201:
+        author = response.json()
+        bot.send_message(chat_id, f"Автор создан! ID: {author['id']}")
+    elif response.status_code == 400:
+        bot.send_message(chat_id, "Сервер отклонил данные:\n" + format_api_error(response))
+    else:
+        bot.send_message(chat_id, f"Ошибка сервера: {response.status_code}")
 
     #удаляем пользователя .pop - метод для работы с коллекциями удаляет ее
     user_data.pop(chat_id, None)
@@ -372,7 +395,7 @@ def get_edit_author_age(message):
         elif response.status_code == 404:
             bot.send_message(chat_id, f"Автор с ID {author_id} не найден на сервере.")
         elif response.status_code == 400:
-            bot.send_message(chat_id, response.json()["message"])
+            bot.send_message(chat_id, "Сервер отклонил данные:\n" + format_api_error(response))
         else:
             bot.send_message(chat_id, f"Ошибка сервера: {response.status_code}")
             
